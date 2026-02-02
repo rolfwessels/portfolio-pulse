@@ -41,3 +41,5 @@ npm run build
 - Price history fetch + caching
 - Portfolio index + ZAR value series
 - Best/worst + contribution metrics
+
+(Scaffold PR: adds initial UI skeleton.)
