@@ -10,6 +10,8 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5050,
     strictPort: true,
+    // Allow access via reverse proxy / custom domain
+    allowedHosts: ['byte.internal.sels.co.za'],
   },
 
   resolve: {
