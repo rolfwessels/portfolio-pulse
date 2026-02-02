@@ -2,31 +2,15 @@
 
 Track investment portfolio growth over time.
 
-This repository is currently **UI-first**: it contains a single-page mock dashboard that sketches the intended layout (no real pricing data yet).
-
 ## What’s in the UI right now
 - Portfolio header + time-range selector (mock)
 - Portfolio growth chart placeholder (mock)
 - Best / worst performer cards (mock)
 - Portfolio JSON panel (sample JSON; not yet wired into calculations)
 
----
-
-## 🚀 Template capabilities (kept from the starter)
-
-This project is based on a lightweight React SPA template using Vite + Radix UI.
-
-### Features
-- ⚛️ React + Vite (super-fast dev experience)
-- 🎛️ Radix UI for accessible, themeable components
-- 📊 Recharts for data visualization
-- 🔌 Optional GraphQL support with Apollo Client and graphql-codegen (currently unused)
-- 🧪 Vitest + Testing Library for testing
-- 🛠️ Makefile automation for local/dev tasks
-- 🐳 Docker + DevContainer ready
-- 📦 Clean, minimal scaffold
-
 ## 🏁 Getting Started
+
+What you need to run this project locally.
 
 ### Prerequisites
 
@@ -148,9 +132,9 @@ make test
 
 ## 🔍 Things we’re working on (PortfolioPulse)
 
-- [ ] Portfolio JSON paste + validation
-- [ ] Holdings mapping (name → ticker/source id)
 - [ ] Price history fetch + caching
+- [ ] Holdings mapping (name → ticker/source id)
+- [ ] Portfolio JSON paste + validation
 - [ ] Portfolio index + ZAR value series
 - [ ] Best/worst + contribution metrics
 
