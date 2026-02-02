@@ -1,0 +1,20 @@
+services:
+  dev:
+    container_name: portfolio-pulse-ui-dev
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    volumes:
+      - ".:/portfolio-pulse-ui"
+      - "./.aws:/root/.aws"
+      - "./zshrc:/root/.zshrc"
+      - portfolio-pulse-ui-cache:/cache
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - HISTFILE=/cache/.bash_history
+    entrypoint: top -b
+    logging:
+      driver: none
+
+volumes:
+  portfolio-pulse-ui-cache:
