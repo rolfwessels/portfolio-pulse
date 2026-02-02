@@ -16,6 +16,22 @@ export function parseHighChartPoints(raw: unknown): HighChartPoint[] {
       .filter(Boolean) as HighChartPoint[]
   }
 
+  // EasyEquities sample shape:
+  // { success:true, chartData:{ HighChartDatasets:[{ HighChartDatasets:[{x,y}, ...], HasData:true }] } }
+  const maybe = raw as any
+  const eePoints = maybe?.chartData?.HighChartDatasets?.[0]?.HighChartDatasets
+  if (Array.isArray(eePoints) && eePoints.length) {
+    const pts = eePoints
+      .map((p: any) => {
+        const ts = Number(p?.x)
+        const v = Number(p?.y)
+        if (!Number.isFinite(ts) || !Number.isFinite(v)) return null
+        return [ts, v] as HighChartPoint
+      })
+      .filter(Boolean) as HighChartPoint[]
+    if (pts.length) return pts
+  }
+
   const obj = raw as EasyEquitiesHighChartResponse
 
   const candidates: Array<unknown> = [

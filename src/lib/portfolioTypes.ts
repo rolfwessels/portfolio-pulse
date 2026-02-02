@@ -5,6 +5,10 @@ export interface PortfolioHolding {
   type: string
   currency: Currency
   weightPct: number
+
+  // Source of truth for price series mapping (EasyEquities contract code)
+  // Examples: EQU.ZA.ETF5IT, EQU.ZA.STXNDQ, EC10.EC.EC10
+  eeCode?: string
 }
 
 export interface PortfolioJson {

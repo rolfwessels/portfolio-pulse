@@ -1,32 +1,53 @@
 import { Box, Container, Flex, Heading, Text } from '@radix-ui/themes'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { JsonEditor } from '@components/JsonEditor'
 import { PortfolioChartMock } from '@components/PortfolioChartMock'
-import type { PortfolioJson } from '@lib/portfolioTypes'
-import { eeRegistry } from '@lib/eeRegistry'
+import type { PortfolioHolding, PortfolioJson } from '@lib/portfolioTypes'
 import { parseHighChartPoints } from '@lib/eeParse'
 import { buildPortfolioIndexSeries } from '@lib/portfolioMath'
+
+function eeUrl(code: string) {
+  return `https://platform.easyequities.io/Equity/GetHighChartDataByContractCode?code=${encodeURIComponent(code)}&period=Max`
+}
+
+function getHoldingsForImporter(holdings: PortfolioHolding[]) {
+  // Prefer portfolio JSON as the single source of truth.
+  const fromPortfolio = holdings
+    .filter((h) => h.eeCode)
+    .map((h) => ({ name: h.name, eeCode: h.eeCode as string }))
+
+  // Deduplicate by code
+  const seen = new Set<string>()
+  return fromPortfolio.filter((h) => {
+    if (seen.has(h.eeCode)) return false
+    seen.add(h.eeCode)
+    return true
+  })
+}
 
 const rangeOptions = ['1W', '1M', '3M', '6M', '1Y', '3Y', '5Y', 'MAX'] as const
 
 type Range = (typeof rangeOptions)[number]
 
-type SeriesState = Record<string, string> // contractCode -> pasted JSON
+type SeriesState = Record<string, string> // eeCode -> pasted JSON
+
+const LS_PORTFOLIO_KEY = 'portfoliopulse.portfolioJson.v1'
+const LS_SERIES_KEY = 'portfoliopulse.eeSeriesByCode.v1'
 
 const defaultPortfolioJson = `{
   "baseCurrency": "ZAR",
   "asOf": "2026-02-02",
   "holdings": [
-    { "name": "1nvest S&P500 Info Tech Index Feeder ETF", "type": "ETF", "currency": "ZAR", "weightPct": 18 },
-    { "name": "Satrix Nasdaq 100 ETF", "type": "ETF", "currency": "ZAR", "weightPct": 10 },
-    { "name": "10X Total World Stock Feeder Exchange Traded Fund", "type": "UnitTrust", "currency": "ZAR", "weightPct": 15 },
-    { "name": "Satrix MSCI World ETF", "type": "ETF", "currency": "ZAR", "weightPct": 15 },
-    { "name": "Sygnia Itrix S&P 500 ETF", "type": "ETF", "currency": "ZAR", "weightPct": 10 },
-    { "name": "Sygnia Itrix S&P Global 1200 ESG ETF", "type": "ETF", "currency": "ZAR", "weightPct": 5 },
-    { "name": "Sygnia Itrix Top 40 ETF", "type": "ETF", "currency": "ZAR", "weightPct": 7 },
-    { "name": "Capitec Bank Holdings Limited", "type": "Stock", "currency": "ZAR", "weightPct": 5 },
-    { "name": "EasyCrypto 10", "type": "Bundle", "currency": "ZAR", "weightPct": 7 },
-    { "name": "EasyETFs AI World Actively Managed ETF", "type": "ETF", "currency": "ZAR", "weightPct": 8 }
+    { "name": "1nvest S&P500 Info Tech Index Feeder ETF", "type": "ETF", "currency": "ZAR", "weightPct": 18, "eeCode": "EQU.ZA.ETF5IT" },
+    { "name": "10X Total World Stock Feeder Exchange Traded Fund", "type": "UnitTrust", "currency": "ZAR", "weightPct": 15, "eeCode": "EQU.ZA.GLOBAL" },
+    { "name": "Capitec Bank Holdings Limited", "type": "Stock", "currency": "ZAR", "weightPct": 5, "eeCode": "EQU.ZA.CPI" },
+    { "name": "EasyCrypto 10", "type": "Bundle", "currency": "ZAR", "weightPct": 7, "eeCode": "EC10.EC.EC10" },
+    { "name": "EasyETFs AI World Actively Managed ETF", "type": "ETF", "currency": "ZAR", "weightPct": 8, "eeCode": "EQU.ZA.EASYAI" },
+    { "name": "Satrix MSCI World ETF", "type": "ETF", "currency": "ZAR", "weightPct": 15, "eeCode": "EQU.ZA.STXWDM" },
+    { "name": "Satrix Nasdaq 100 ETF", "type": "ETF", "currency": "ZAR", "weightPct": 10, "eeCode": "EQU.ZA.STXNDQ" },
+    { "name": "Sygnia Itrix S&P 500 ETF", "type": "ETF", "currency": "ZAR", "weightPct": 10, "eeCode": "EQU.ZA.SYG500" },
+    { "name": "Sygnia Itrix S&P Global 1200 ESG ETF", "type": "ETF", "currency": "ZAR", "weightPct": 5, "eeCode": "EQU.ZA.SYGESG" },
+    { "name": "Sygnia Itrix Top 40 ETF", "type": "ETF", "currency": "ZAR", "weightPct": 7, "eeCode": "EQU.ZA.SYGT40" }
   ]
 }`
 
@@ -35,6 +56,40 @@ export default function Dashboard() {
 
   const [portfolioText, setPortfolioText] = useState(defaultPortfolioJson)
   const [seriesByContractCode, setSeriesByContractCode] = useState<SeriesState>({})
+
+  // Load persisted state
+  useEffect(() => {
+    try {
+      const savedPortfolio = localStorage.getItem(LS_PORTFOLIO_KEY)
+      if (savedPortfolio) setPortfolioText(savedPortfolio)
+    } catch {
+      // ignore
+    }
+
+    try {
+      const savedSeries = localStorage.getItem(LS_SERIES_KEY)
+      if (savedSeries) setSeriesByContractCode(JSON.parse(savedSeries) as SeriesState)
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  // Persist state
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_PORTFOLIO_KEY, portfolioText)
+    } catch {
+      // ignore
+    }
+  }, [portfolioText])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_SERIES_KEY, JSON.stringify(seriesByContractCode))
+    } catch {
+      // ignore
+    }
+  }, [seriesByContractCode])
 
   const parsedPortfolio = useMemo(() => {
     try {
@@ -50,9 +105,8 @@ export default function Dashboard() {
     if (!parsedPortfolio.ok) return { points: [], missingHoldings: [], usedHoldings: [] }
 
     const input = holdings.map((h) => {
-      const meta = eeRegistry.holdings.find((x) => x.name === h.name)
-      const contractCode = meta?.contractCode
-      const rawText = contractCode ? seriesByContractCode[contractCode] : undefined
+      const eeCode = (h as any).eeCode as string | undefined
+      const rawText = eeCode ? seriesByContractCode[eeCode] : undefined
       let points: any[] = []
       if (rawText) {
         try {
@@ -158,7 +212,7 @@ export default function Dashboard() {
               value={portfolioText}
               onChange={setPortfolioText}
               height={260}
-              hint="Paste your portfolio here. Holdings names must match the registry mapping below (for now)."
+              hint="Paste your portfolio here. Each holding should include an eeCode (EasyEquities contract code) — that’s the source of truth."
               error={parsedPortfolio.ok ? undefined : parsedPortfolio.error}
             />
           </Box>
@@ -174,52 +228,76 @@ export default function Dashboard() {
                 p="3"
                 style={{ borderRadius: 10, border: '1px solid var(--gray-a6)', background: 'var(--gray-a2)' }}
               >
-                {eeRegistry.holdings.map((h) => (
-                  <Box key={h.contractCode} mb="4">
-                    <Text weight="medium">{h.name}</Text>
-                    <Text as="div" size="1" color="gray">
-                      code: <span style={{ fontFamily: 'ui-monospace' }}>{h.contractCode}</span>
-                    </Text>
-                    <Text as="div" size="1" color="gray">
-                      url:{' '}
-                      <span style={{ fontFamily: 'ui-monospace' }}>
-                        https://platform.easyequities.io/Equity/GetHighChartDataByContractCode?code={h.contractCode}&period=Max
-                      </span>
-                    </Text>
-                    <Box
-                      asChild
-                      mt="2"
-                      style={{
-                        borderRadius: 10,
-                        border: '1px solid var(--gray-a6)',
-                        background: 'transparent',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <textarea
-                        placeholder="Paste JSON response here"
-                        value={seriesByContractCode[h.contractCode] ?? ''}
-                        onChange={(e) =>
-                          setSeriesByContractCode((s) => ({ ...s, [h.contractCode]: e.target.value }))
-                        }
-                        spellCheck={false}
+                {getHoldingsForImporter(holdings).map((h) => {
+                  const url = eeUrl(h.eeCode)
+                  const rawText = seriesByContractCode[h.eeCode] ?? ''
+                  let parsedCount: number | null = null
+                  if (rawText.trim()) {
+                    try {
+                      parsedCount = parseHighChartPoints(JSON.parse(rawText)).length
+                    } catch {
+                      parsedCount = 0
+                    }
+                  }
+
+                  return (
+                    <Box key={h.eeCode} mb="4">
+                      <Text weight="medium">{h.name}</Text>
+                      <Text as="div" size="1" color="gray">
+                        eeCode: <span style={{ fontFamily: 'ui-monospace' }}>{h.eeCode}</span>
+                        {parsedCount !== null ? (
+                          <span style={{ marginLeft: 8 }}>
+                            parsed points: <span style={{ fontFamily: 'ui-monospace' }}>{parsedCount}</span>
+                          </span>
+                        ) : null}
+                      </Text>
+                      <Text as="div" size="1" color="gray">
+                        url:{' '}
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ fontFamily: 'ui-monospace' }}
+                        >
+                          {url}
+                        </a>
+                      </Text>
+
+                      <Box
+                        asChild
+                        mt="2"
                         style={{
-                          width: '100%',
-                          minHeight: 80,
-                          padding: 10,
-                          resize: 'vertical',
-                          outline: 'none',
-                          border: 'none',
-                          background: 'var(--gray-a1)',
-                          fontFamily:
-                            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                          fontSize: 11,
-                          color: 'var(--gray-12)',
+                          borderRadius: 10,
+                          border: '1px solid var(--gray-a6)',
+                          background: 'transparent',
+                          overflow: 'hidden',
                         }}
-                      />
+                      >
+                        <textarea
+                          placeholder="Paste JSON response here"
+                          value={rawText}
+                          onChange={(e) =>
+                            setSeriesByContractCode((s) => ({ ...s, [h.eeCode]: e.target.value }))
+                          }
+                          spellCheck={false}
+                          style={{
+                            width: '100%',
+                            minHeight: 80,
+                            padding: 10,
+                            resize: 'vertical',
+                            outline: 'none',
+                            border: 'none',
+                            background: 'var(--gray-a1)',
+                            fontFamily:
+                              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                            fontSize: 11,
+                            color: 'var(--gray-12)',
+                          }}
+                        />
+                      </Box>
                     </Box>
-                  </Box>
-                ))}
+                  )
+                })}
               </Box>
             </Flex>
           </Box>
