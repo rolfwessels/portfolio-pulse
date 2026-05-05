@@ -4,7 +4,16 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-    
+
+  // Dev server: Rolf opened Docker port range 5000-5100 for this project.
+  server: {
+    host: '0.0.0.0',
+    port: 5050,
+    strictPort: true,
+    // Allow access via reverse proxy / custom domain
+    allowedHosts: ['byte.internal.sels.co.za'],
+  },
+
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '../src'),
